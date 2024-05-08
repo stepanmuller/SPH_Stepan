@@ -163,9 +163,6 @@ v = np.zeros(particle_count)
 ro = np.full(particle_count, RO_0)
 p = np.zeros(particle_count)
 vol = np.full(particle_count, SPACING ** 2)
-new_u = np.zeros(particle_count)
-new_v = np.zeros(particle_count)
-new_ro = np.zeros(particle_count)
 particle_type_list = np.zeros(particle_count) #0=wall, 1=fluid
 
 ### GENERATING PARTICLE COORDS
