@@ -77,6 +77,7 @@ class Manager:
 		global x, y, u, v, ro, p, vol, new_u, new_v, new_ro, particle_type_list
 		time_start = time.time()
 		for i in range(100): #iterations per one graphics step
+			
 			### GETTING I INTERACTION MATRIX ROWS AND COLS
 			boxes = sort_to_boxes(x, y)
 			friends = get_friends(boxes)
@@ -98,28 +99,23 @@ class Manager:
 			Pi = (8 * (Du * Dx + Dv * Dy)) / Mr2
 			#DroDt
 			Mro_data = Du * Wx + Dv * Wy
-			Mro = sparse.coo_matrix((Mro_data, (rows, cols)), shape=(particle_count, particle_count))
-			DroDt = (-ro) * (Mro.dot(vol))
+			Matrix = sparse.coo_matrix((Mro_data, (rows, cols)), shape=(particle_count, particle_count))
+			DroDt = (-ro) * (Matrix.dot(vol))
 			#Diffusion term
 			Mr = Mr2**0.5
-			Mdiff_data = (Dro * (Dx * Wx + Dy * Wy)) / Mr
-			Mdiff = sparse.coo_matrix((Mdiff_data, (rows, cols)), shape=(particle_count, particle_count))
-			DroDt = DroDt + C0 * (Mdiff.dot(vol)) 
+			Matrix.data = (Dro * (Dx * Wx + Dy * Wy)) / Mr
+			DroDt = DroDt + C0 * (Matrix.dot(vol)) 
 			#DuDt
-			Mp_data = Dp * Wx
-			Mp = sparse.coo_matrix((Mp_data, (rows, cols)), shape=(particle_count, particle_count))
-			Mpi_data = Pi * Wx
-			Mpi = sparse.coo_matrix((Mpi_data, (rows, cols)), shape=(particle_count, particle_count))
-			DuDt = (-1 / ro) * Mp.dot(vol)
-			DuDt = DuDt + (KIN_VISCOSITY * RO_0 / ro) * (Mpi.dot(vol))
+			Matrix.data = Dp * Wx
+			DuDt = (-1 / ro) * Matrix.dot(vol)
+			Matrix.data = Pi * Wx
+			DuDt = DuDt + (KIN_VISCOSITY * RO_0 / ro) * (Matrix.dot(vol))
 			DuDt = DuDt + np.full(particle_count, G_X)
 			#DvDt
-			Mp_data = Dp * Wy
-			Mp = sparse.coo_matrix((Mp_data, (rows, cols)), shape=(particle_count, particle_count))
-			Mpi_data = Pi * Wy
-			Mpi = sparse.coo_matrix((Mpi_data, (rows, cols)), shape=(particle_count, particle_count))
-			DvDt = (-1 / ro) * Mp.dot(vol)
-			DvDt = DvDt + (KIN_VISCOSITY * RO_0 / ro) * (Mpi.dot(vol))
+			Matrix.data = Dp * Wy
+			DvDt = (-1 / ro) * Matrix.dot(vol)
+			Matrix.data = Pi * Wy
+			DvDt = DvDt + (KIN_VISCOSITY * RO_0 / ro) * (Matrix.dot(vol))
 			DvDt = DvDt + np.full(particle_count, G_Y)
 			#adding additions to variables
 			ro = ro + DroDt * TIMESTEP
@@ -135,6 +131,7 @@ class Manager:
 			y = y + v * TIMESTEP
 			
 			self.iteration = self.iteration + 1
+		
 		self.time_running = self.time_running + (time.time() - time_start)
 		print("Iterations finished: " + str(self.iteration) + " Simulation time: " + str(round(self.iteration * TIMESTEP, 6)) + "s")
 		print("Average calculating time per iteration: " + str(self.time_running / self.iteration) + "s")
