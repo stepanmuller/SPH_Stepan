@@ -1,4 +1,4 @@
-from particle_graphics import *
+from particle_graphics_forces import *
 import math
 import copy
 import time
@@ -12,9 +12,9 @@ G_Y = -10 #ms-2
 KIN_VISCOSITY = 10**(-6) * 1 #m2s-1
 RO_0 = 1000 #kgm-3
 C0 = 1500 #ms-1
-TIMESTEP = 0.000003 #s
-FIELD_SIZE = 6 #number of fluid particles in y
-WALL_THICKNESS = 2 #number of particles across wall
+TIMESTEP = 0.000002 #s
+FIELD_SIZE = 20 #number of fluid particles in y
+WALL_THICKNESS = 3 #number of particles across wall
 BOX_SIZE = W_LENGTH * 1.8214 #m gives 0.99 area of the weight function
 
 def sort_to_boxes(x, y):
@@ -58,12 +58,11 @@ def get_I(boxes, friends):
 			i = mybox.pop(0)
 			i_list.extend([i] * len(mybox))
 			j_list.extend(mybox)
-	i_list = np.array(i_list, dtype=np.int32)
-	j_list = np.array(j_list, dtype=np.int32)
-	ones_x = np.ones(len(i_list), dtype=np.int8)
-	I = sparse.coo_matrix((ones_x, (i_list, j_list)), shape=(particle_count, particle_count))
-	I = I + I.transpose()
-	return I
+	rows = i_list + j_list
+	cols = j_list + i_list
+	rows = np.array(rows, dtype=np.int32)
+	cols = np.array(cols, dtype=np.int32)
+	return rows, cols
 
 class Manager:
 	def __init__(self):
@@ -75,74 +74,76 @@ class Manager:
 		self.step()
 		
 	def step(self):
-		global x, y, u, v, ro, p, vol, new_u, new_v, new_ro, particle_type_list
+		global x, y, u, v, ro, p, vol, new_u, new_v, new_ro, particle_type_list, fx, fy
 		time_start = time.time()
-		### GETTING I INTERACTION MATRIX
-		boxes = sort_to_boxes(x, y)
-		friends = get_friends(boxes)
-		I = get_I(boxes, friends)
-
-		### CALCULATING
-		Mx = I.multiply(x)
-		My = I.multiply(y)
-		Mu = I.multiply(u)
-		Mv = I.multiply(v)
-		Mro = I.multiply(ro)
-		Mp = I.multiply(p)
-		Dx = Mx - Mx.transpose() 
-		Dy = My - My.transpose()
-		Du = Mu - Mu.transpose()
-		Dv = Mv - Mv.transpose()
-		Dro = Mro - Mro.transpose()
-		Dp = Mp + Mp.transpose()
-		Mr2 = Dx.power(2) + Dy.power(2)
-		#Wij, Wx, Wy
-		Mexp = (-Mr2 / W_LENGTH ** 2).expm1()
-		Mexp.data = Mexp.data + np.ones_like(Mexp.data)
-		Wsize = (1 / (math.pi * (W_LENGTH ** 4))) * Mexp
-		Wx = Dx.multiply(Wsize)
-		Wy = Dy.multiply(Wsize)
-		#Pi
-		Pi = (8 * (Du.multiply(Dx) + Dv.multiply(Dy)))
-		Pi = Pi.tolil()
-		Mr2 = Mr2.tolil()
-		Pi[Mr2.nonzero()] = Pi[Mr2.nonzero()] / Mr2[Mr2.nonzero()]
-		#DroDt
-		DroDt = (-ro) * (((Du.multiply(Wx) + Dv.multiply(Wy)).dot(vol)))
-		#Diffusion term
-		Diff = Dro.multiply(Dx.multiply(Wx) + Dy.multiply(Wy))
-		Diff = Diff.tolil()
-		Mr = Mr2.power(0.5)
-		Diff[Mr.nonzero()] = Diff[Mr.nonzero()] / Mr[Mr.nonzero()]
-		DroDt = DroDt + C0 * (Diff.dot(vol)) 
-		#DuDt
-		DuDt = (-1 / ro) * ((Dp.multiply(Wx)).dot(vol))
-		DuDt = DuDt + (KIN_VISCOSITY * RO_0 / ro) * ((Pi.multiply(Wx)).dot(vol))
-		DuDt = DuDt + np.full(particle_count, G_X)
-		#DvDt
-		DvDt = (-1 / ro) * ((Dp.multiply(Wy)).dot(vol))
-		DvDt = DvDt + (KIN_VISCOSITY * RO_0 / ro) * ((Pi.multiply(Wy)).dot(vol))
-		DvDt = DvDt + np.full(particle_count, G_Y)
-		#adding additions to variables
-		ro = ro + DroDt * TIMESTEP
-		u = u + DuDt * TIMESTEP
-		v = v + DvDt * TIMESTEP
-		#recalculating pressure
-		p = (C0 ** 2) * (ro - np.full(particle_count, RO_0))
-		#enforcing zero velocity boundary conditions on wall
-		u = u * particle_type_list
-		v = v * particle_type_list
-		#calculating new positions using new velocity
-		x = x + u * TIMESTEP
-		y = y + v * TIMESTEP
+		for i in range(100): #iterations per one graphics step
+			### GETTING I INTERACTION MATRIX ROWS AND COLS
+			boxes = sort_to_boxes(x, y)
+			friends = get_friends(boxes)
+			rows, cols = get_I(boxes, friends)
+			### CALCULATING
+			Dx = x[cols] - x[rows]
+			Dy = y[cols] - y[rows]
+			Du = u[cols] - u[rows]
+			Dv = v[cols] - v[rows]
+			Dro = ro[cols] - ro[rows]
+			Dp = p[cols] + p[rows]
+			Mr2 = Dx**2 + Dy**2
+			#Wij, Wx, Wy
+			Mexp = np.exp(-Mr2 / W_LENGTH ** 2)
+			Wsize = (1 / (math.pi * (W_LENGTH ** 4))) * Mexp
+			Wx = Dx * Wsize
+			Wy = Dy * Wsize
+			#Pi
+			Pi = (8 * (Du * Dx + Dv * Dy)) / Mr2
+			#DroDt
+			Mro_data = Du * Wx + Dv * Wy
+			Mro = sparse.coo_matrix((Mro_data, (rows, cols)), shape=(particle_count, particle_count))
+			DroDt = (-ro) * (Mro.dot(vol))
+			#Diffusion term
+			Mr = Mr2**0.5
+			Mdiff_data = (Dro * (Dx * Wx + Dy * Wy)) / Mr
+			Mdiff = sparse.coo_matrix((Mdiff_data, (rows, cols)), shape=(particle_count, particle_count))
+			DroDt = DroDt + C0 * (Mdiff.dot(vol)) 
+			#DuDt
+			Mp_data = Dp * Wx
+			Mp = sparse.coo_matrix((Mp_data, (rows, cols)), shape=(particle_count, particle_count))
+			Mpi_data = Pi * Wx
+			Mpi = sparse.coo_matrix((Mpi_data, (rows, cols)), shape=(particle_count, particle_count))
+			DuDt = (-1 / ro) * Mp.dot(vol)
+			DuDt = DuDt + (KIN_VISCOSITY * RO_0 / ro) * (Mpi.dot(vol))
+			DuDt = DuDt + np.full(particle_count, G_X)
+			#DvDt
+			Mp_data = Dp * Wy
+			Mp = sparse.coo_matrix((Mp_data, (rows, cols)), shape=(particle_count, particle_count))
+			Mpi_data = Pi * Wy
+			Mpi = sparse.coo_matrix((Mpi_data, (rows, cols)), shape=(particle_count, particle_count))
+			DvDt = (-1 / ro) * Mp.dot(vol)
+			DvDt = DvDt + (KIN_VISCOSITY * RO_0 / ro) * (Mpi.dot(vol))
+			DvDt = DvDt + np.full(particle_count, G_Y)
+			#calculating forces
+			m = vol * ro
+			fx = DuDt * m
+			fy = DvDt * m
+			#adding additions to variables
+			ro = ro + DroDt * TIMESTEP
+			u = u + DuDt * TIMESTEP
+			v = v + DvDt * TIMESTEP
+			#recalculating pressure
+			p = (C0 ** 2) * (ro - np.full(particle_count, RO_0))
+			#enforcing zero velocity boundary conditions on wall
+			u = u * particle_type_list
+			v = v * particle_type_list
+			#calculating new positions using new velocity
+			x = x + u * TIMESTEP
+			y = y + v * TIMESTEP
+			
+			self.iteration = self.iteration + 1
 		self.time_running = self.time_running + (time.time() - time_start)
-		
-		self.iteration = self.iteration + 1
-		if self.iteration % 100 == 0:
-			print("Iterations finished: " + str(self.iteration) + " Simulation time: " + str(round(self.iteration * TIMESTEP, 6)) + "s")
-			print("Average calculating time per iteration: " + str(self.time_running / self.iteration) + "s")
-			print()
-			self.my_graphics.update(x, y, p)
+		print("Iterations finished: " + str(self.iteration) + " Simulation time: " + str(round(self.iteration * TIMESTEP, 6)) + "s")
+		print("Average calculating time per iteration: " + str(self.time_running / self.iteration) + "s")
+		print()
+		self.my_graphics.update(x, y, p, fx, fy)
 		self.window.after(1, self.step) #launch new iteration after 1ms (this is necessary for the graphics to work properly)
 
 ###START, generating particles
@@ -163,6 +164,8 @@ v = np.zeros(particle_count)
 ro = np.full(particle_count, RO_0)
 p = np.zeros(particle_count)
 vol = np.full(particle_count, SPACING ** 2)
+fx = np.zeros(particle_count)
+fy = np.zeros(particle_count)
 particle_type_list = np.zeros(particle_count) #0=wall, 1=fluid
 
 ### GENERATING PARTICLE COORDS
