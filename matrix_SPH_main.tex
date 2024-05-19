@@ -2,9 +2,11 @@
 \usepackage{graphicx} % Required for inserting images
 \usepackage[a4paper, margin=1in]{geometry}
 \usepackage{amsmath}
+\usepackage{authblk} 
 
 \title{Matrix Based SPH Formulation}
 \author{Štěpán Müller}
+\affil{Czech Technical University in Prague, Faculty of Mechanical Engineering}
 \date{May 2024}
 
 \begin{document}
@@ -167,7 +169,7 @@ $$\overrightarrow{\frac{Dy}{Dt}}=\Vec{v}$$
 $$
 \vec{p}=c_0^2\left(\Vec{\rho}-\Vec{\rho_0}\right)
 $$
-where the $\cdot$ symbol indicates regular matrix by vector multiplication, whereas no dot suggests element-wise multiplication.
+where the $\cdot$ symbol indicates basic matrix by vector multiplication, whereas no dot suggests element-wise multiplication. It requires emphasizing that the $\cdot$ matrix by vector multiplication should utilize the sparsity of the matrix to prevent $O(N^2)$ time complexity, which would make all effort for further optimization entirely pointless.
 \section{Optimization}
 \subsection{Data vector format}
 Because matrices 
@@ -240,7 +242,7 @@ x_2-x_1 & x_1-x_2 & x_3-x_2 & x_2-x_3\\
 $$
 As shown, this method provides the same result for $\Vec{Dx}$ as the method from \ref{matrices of differences}.
 \section{Note about performance}
-Compared to the standard looping method, which only requires to store vectors as long as $N$, the matrix based method requires to write vectors of length equal to number of particle pairs. Length of those vectors might range from $10N$ to $100N$.
+Compared to the standard looping method, which only requires to store vectors as long as $N$, the matrix based method requires to write vectors of length equal to number of particle pairs. Length of those vectors might range on the order of $10N$ to $100N$.
 
 Despite the memory downside, removing most of the iterative loop using the matrix formulation could provide advantages in cases where memory is not the limit, and computational speed has the highest priority. Implementing the matrix method using efficient multiprocessing for matrix/vector operations needs to be investigated in order to evaluate practical benefits.
 \section{Conclusion}
