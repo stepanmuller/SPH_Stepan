@@ -39,7 +39,7 @@ A common algorithmization approach is to loop for $i$ over all particles and cal
 
 \section{Constructing the matrix based formulation}
 \subsection{Interaction matrix I}
-The matrix method starts by identifying possible interacting particle pairs (for example using the bin sort method) and storing this information in the interation matrix $I$. $I$ is a sparse square symetrical binary matrix of size $N\times N$, where $N$ is the number of particles.
+The matrix method starts by identifying possible interacting particle pairs (for example using the bin sort method) and storing this information in the interaction matrix $I$. $I$ is a sparse square symetrical binary matrix of size $N\times N$, where $N$ is the number of particles.
 $$I = 
 \begin{bmatrix}
 0 & 1 & 0\\
@@ -101,6 +101,8 @@ x_1-x_2 & 0 & x_3-x_2\\
 \end{bmatrix}
 $$
 Using the same approach, difference matrices $Dy, Du, Dv, D\rho$ can be calculated, with the exception of difference matrix $Dp$, which uses addition instead of subtraction due to the chosen SPH scheme.
+
+It requires emphasizing that all involved matrix by vector multiplications should utilize the sparsity of the matrix to prevent $O(N^2)$ time complexity, which would make all effort for further optimization entirely pointless.
 
 \subsection{Matrix $\nabla W_x$ and $\nabla W_y$}
 Hereafter, a simplified notation will be used:
@@ -169,7 +171,7 @@ $$\overrightarrow{\frac{Dy}{Dt}}=\Vec{v}$$
 $$
 \vec{p}=c_0^2\left(\Vec{\rho}-\Vec{\rho_0}\right)
 $$
-where the $\cdot$ symbol indicates basic matrix by vector multiplication, whereas no dot suggests element-wise multiplication. It requires emphasizing that the $\cdot$ matrix by vector multiplication should utilize the sparsity of the matrix to prevent $O(N^2)$ time complexity, which would make all effort for further optimization entirely pointless.
+where the $\cdot$ symbol indicates basic matrix by vector multiplication, whereas no dot suggests element-wise multiplication. 
 \section{Optimization}
 \subsection{Data vector format}
 Because matrices 
