@@ -3,6 +3,7 @@ import math
 import copy
 import time
 import numpy as np
+import jax.numpy as jaxnp
 from scipy import sparse
 
 SPACING = 0.01 #m spacing of particles
@@ -11,13 +12,16 @@ G_X = 0 #ms-2
 G_Y = -10 #ms-2
 KIN_VISCOSITY = 10**(-6) * 1 #m2s-1
 RO_0 = 1000 #kgm-3
-C0 = 150 #ms-1
-TIMESTEP = 0.00002 #s
+C0 = 1500 #ms-1
+TIMESTEP = 0.000002 #s
 FIELD_SIZE = 20 #number of fluid particles in y
-WALL_THICKNESS = 2 #number of particles across wall
+WALL_THICKNESS = 3 #number of particles across wall
 BOX_SIZE = W_LENGTH * 1.8214 #m gives 0.99 area of the weight function
 
 def sort_to_boxes(x, y):
+	print("printuju")
+	print(x)
+	print("konec")
 	box_count_x = int(max(x) / BOX_SIZE) + 2
 	box_count_y = int(max(y) / BOX_SIZE) + 2
 	boxes = []
@@ -60,8 +64,8 @@ def get_I(boxes, friends):
 			j_list.extend(mybox)
 	rows = i_list + j_list
 	cols = j_list + i_list
-	rows = np.array(rows, dtype=np.int32)
-	cols = np.array(cols, dtype=np.int32)
+	rows = jaxnp.array(rows, dtype=np.int32)
+	cols = jaxnp.array(cols, dtype=np.int32)
 	return rows, cols
 
 class Manager:
@@ -76,18 +80,21 @@ class Manager:
 	def step(self):
 		global x, y, u, v, ro, p, vol, new_u, new_v, new_ro, particle_type_list
 		time_start = time.time()
-		for i in range(500): #iterations per one graphics step
-			
+		for i in range(100): #iterations per one graphics step
+			print("bleble")
 			### GETTING I INTERACTION MATRIX ROWS AND COLS
 			boxes = sort_to_boxes(x, y)
+			print(boxes)
 			friends = get_friends(boxes)
 			rows, cols = get_I(boxes, friends)
-			"""
-			print()
-			print("Starting iteration", self.iteration)
-			print("Interaction count", len(cols))
-			"""
 			### CALCULATING
+			print("##CALCULATING")
+			print("x")
+			print(x)
+			print("cols")
+			print(cols)
+			print("rows")
+			print(rows)
 			Dx = x[cols] - x[rows]
 			Dy = y[cols] - y[rows]
 			Du = u[cols] - u[rows]
@@ -97,17 +104,13 @@ class Manager:
 			Mr2 = Dx**2 + Dy**2
 			#Wij, Wx, Wy
 			Mexp = np.exp(-Mr2 / W_LENGTH ** 2)
-			Wsize = (2 / (math.pi * (W_LENGTH ** 4))) * Mexp
+			Wsize = (1 / (math.pi * (W_LENGTH ** 4))) * Mexp
 			Wx = Dx * Wsize
 			Wy = Dy * Wsize
 			#Pi
 			Pi = (8 * (Du * Dx + Dv * Dy)) / Mr2
 			#DroDt
 			Mro_data = Du * Wx + Dv * Wy
-			"""
-			for i in range(len(Mro_data)):
-				print("row ", rows[i], "col ", cols[i], "data ", Mro_data[i])
-			"""
 			Matrix = sparse.coo_matrix((Mro_data, (rows, cols)), shape=(particle_count, particle_count))
 			DroDt = (-ro) * (Matrix.dot(vol))
 			#Diffusion term
@@ -138,12 +141,7 @@ class Manager:
 			#calculating new positions using new velocity
 			x = x + u * TIMESTEP
 			y = y + v * TIMESTEP
-			"""
-			for i in range(len(DroDt)):
-				print("i ", i, "DroDt ", DroDt[i])
-			for i in range(len(x)):
-				print("Particle ", i, "x", x[i], "y", y[i], "u", u[i], "v", v[i], "ro", ro[i], "p", p[i])			
-			"""
+			
 			self.iteration = self.iteration + 1
 		
 		self.time_running = self.time_running + (time.time() - time_start)
@@ -164,14 +162,14 @@ particle_count = int(round(particle_count))
 print("Particle count:", particle_count)
 print()
 
-x = np.zeros(particle_count)
-y = np.zeros(particle_count)
-u = np.zeros(particle_count)
-v = np.zeros(particle_count)
-ro = np.full(particle_count, RO_0)
-p = np.zeros(particle_count)
-vol = np.full(particle_count, SPACING ** 2)
-particle_type_list = np.zeros(particle_count) #0=wall, 1=fluid
+x = jaxnp.zeros(particle_count)
+y = jaxnp.zeros(particle_count)
+u = jaxnp.zeros(particle_count)
+v = jaxnp.zeros(particle_count)
+ro = jaxnp.full(particle_count, RO_0)
+p = jaxnp.zeros(particle_count)
+vol = jaxnp.full(particle_count, SPACING ** 2)
+particle_type_list = jaxnp.zeros(particle_count) #0=wall, 1=fluid
 
 ### GENERATING PARTICLE COORDS
 
@@ -181,9 +179,9 @@ for i in range(int(FIELD_SIZE / 2)):
 	for j in range(FIELD_SIZE):
 		x_coord = (WALL_THICKNESS + i) * SPACING
 		y_coord = (WALL_THICKNESS + j) * SPACING
-		x[index] = x_coord
-		y[index] = y_coord
-		particle_type_list[index] = 1
+		x.at[index].set(x_coord)
+		y.at[index].set(y_coord)
+		particle_type_list.at[index].set(1)
 		index = index + 1
 		
 ### WALL PARTICLE GENERATOR
@@ -199,9 +197,9 @@ for i in range(FIELD_SIZE + WALL_THICKNESS * 2):
 		if overlap > 0:
 			x_coord = i * SPACING
 			y_coord = j * SPACING
-			x[index] = x_coord
-			y[index] = y_coord
-			particle_type_list[index] = 0
+			x.at[index].set(x_coord)
+			y.at[index].set(y_coord)
+			particle_type_list.at[index].set(0)
 			index = index + 1
 
 mymanager = Manager()
