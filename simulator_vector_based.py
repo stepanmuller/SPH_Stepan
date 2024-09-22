@@ -14,7 +14,7 @@ RO_0 = 1000 #kgm-3
 C0 = 150 #ms-1
 TIMESTEP = 0.00002 #s
 FIELD_SIZE = 20 #number of fluid particles in y
-WALL_THICKNESS = 2 #number of particles across wall
+WALL_THICKNESS = 3 #number of particles across wall
 BOX_SIZE = W_LENGTH * 1.8214 #m gives 0.99 area of the weight function
 
 def sort_to_boxes(x, y):
